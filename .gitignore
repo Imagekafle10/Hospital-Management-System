@@ -81,6 +81,8 @@ secrets.json
 **/.pub-cache/
 **/build/
 
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
 # Flutter generated platform files
 **/android/.gradle/
 **/android/app/debug/
