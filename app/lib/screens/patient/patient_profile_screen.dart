@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import 'my_admissions_screen.dart';
 
 class PatientProfileScreen extends StatefulWidget {
   const PatientProfileScreen({super.key});
@@ -84,6 +85,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       appBar: AppBar(
         title: const Text('My profile'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.local_hospital_outlined),
+            tooltip: 'My hospital stays',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyAdmissionsScreen()),
+            ),
+          ),
           if (p != null)
             IconButton(
               icon: Icon(_editing ? Icons.close : Icons.edit_outlined),

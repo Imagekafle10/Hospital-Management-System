@@ -17,7 +17,7 @@ Run `SqlScripts/schema.sql` against your SQL Server instance (SSMS, Azure Data S
 ```
 sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -i SqlScripts/schema.sql
 ```
-This creates the `HospitalMgmtDb` database and all tables (`Users`, `Doctors`, `Patients`, `Appointments`, `Prescriptions`).
+This creates the `HospitalMgmtDb` database and all tables (`Users`, `Doctors`, `Patients`, `Appointments`, `Prescriptions`, `MedicalRecords`). If your database already exists from before, just re-run the script — every `CREATE TABLE` is guarded with `IF OBJECT_ID(...) IS NULL`, so it only adds the new `MedicalRecords` table.
 
 ### 2. Configure connection & JWT secret
 Edit `appsettings.json`:
@@ -58,8 +58,43 @@ Swagger UI opens at `https://localhost:<port>/swagger` where you can try every e
 | PUT | `/api/appointments/{id}/status` | Doctor / Patient / Admin | Confirm, complete, or cancel |
 | POST | `/api/appointments/{id}/prescriptions` | Doctor | Add a prescription |
 | GET | `/api/appointments/{id}/prescriptions` | Patient / Doctor / Admin (involved parties only) | View prescriptions |
+| POST | `/api/medicalrecords` | Patient (own) / Doctor / Admin | Upload a medical record or lab report (`multipart/form-data`) |
+| GET | `/api/medicalrecords/mine` | Patient | List my own records |
+| GET | `/api/medicalrecords/patient/{patientId}` | Patient (own) / Doctor (their patients) / Admin | List a patient's records |
+| GET | `/api/medicalrecords/{id}` | Involved parties only | Record metadata |
+| GET | `/api/medicalrecords/{id}/download` | Involved parties only | Download the underlying file |
+| DELETE | `/api/medicalrecords/{id}` | Uploader / Admin | Delete a record and its file |
 
 Every protected route expects: `Authorization: Bearer <token>`
+
+### Uploading a medical record
+`POST /api/medicalrecords` expects `multipart/form-data` with fields: `RecordType` (`LabReport`, `Prescription`, `Diagnosis`, `Imaging`, `Other`), `Title`, optional `Description`, optional `AppointmentId`, `PatientId` (required when a Doctor/Admin uploads on behalf of a patient — ignored for Patients, who can only upload their own), and `File` (the actual file — pdf/jpg/jpeg/png/doc/docx, 20 MB default limit, configurable via `FileStorage:MaxFileSizeMb`). Files are stored on disk under `FileStorage:MedicalRecordsPath` (default `App_Data/medical-records`) with a randomized file name; the original file name and content type are kept in the DB for downloads.
+
+### In-patient management (Wards / Beds / Admissions)
+
+| Method | Route | Who | Purpose |
+|---|---|---|---|
+| POST | `/api/wards` | Admin | Create a ward |
+| GET | `/api/wards` | Admin, Doctor | List wards with live bed counts |
+| GET | `/api/wards/{id}` | Admin, Doctor | Ward detail |
+| PUT | `/api/wards/{id}` | Admin | Update a ward |
+| DELETE | `/api/wards/{id}` | Admin | Delete a ward (must have no beds) |
+| POST | `/api/wards/{wardId}/beds` | Admin | Add a bed to a ward |
+| GET | `/api/wards/{wardId}/beds` | Admin, Doctor | List a ward's beds |
+| GET | `/api/beds?status=Available` | Admin, Doctor | List/filter beds across all wards |
+| PUT | `/api/beds/{id}/status` | Admin | Manually mark a bed `Available`/`Maintenance` |
+| DELETE | `/api/beds/{id}` | Admin | Delete a bed (must not be occupied) |
+| POST | `/api/admissions` | Doctor / Admin | Admit a patient into a bed |
+| GET | `/api/admissions/{id}` | Involved parties only | Admission detail |
+| GET | `/api/admissions/active` | Admin, Doctor | Everyone currently admitted |
+| GET | `/api/admissions/mine` | Patient | My own admission history |
+| GET | `/api/admissions/patient/{patientId}` | Admin, Doctor | A patient's admission history |
+| PUT | `/api/admissions/{id}/discharge` | Admitting Doctor / Admin | Discharge and free the bed |
+| PUT | `/api/admissions/{id}/transfer-bed` | Admitting Doctor / Admin | Move the patient to a different bed |
+
+Occupying/freeing a bed is never done directly — it only happens as a side effect of admit/discharge/transfer, each wrapped in a DB transaction so a bed can't be double-booked under concurrent requests. A Doctor is recorded as their own admitting doctor; an Admin must pass `AdmittingDoctorId` explicitly.
+
+> While wiring this in, `Program.cs` was missing the DI registrations for `IPaymentRepository`, `IEsewaService`, and `IKhaltiService` (the Payments controller would have thrown at startup), and `SqlScripts/schema.sql` had no `Payments` table even though the payment code expects one. Both are fixed now — re-run `schema.sql` to pick up the `Payments` table alongside the new `Wards`/`Beds`/`Admissions` ones.
 
 ## Creating an Admin account
 There's no public "register as Admin" endpoint on purpose. Insert one directly after hashing a password with BCrypt, e.g. via a small one-off script or by temporarily allowing `"Admin"` in `RegisterDto.Role` during initial setup, then locking it back down.

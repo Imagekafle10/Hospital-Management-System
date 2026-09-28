@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'esewa_payment_screen.dart';
 import '../../core/constants.dart';
 import '../../models/appointment.dart';
 import '../../providers/appointment_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/payment_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 
@@ -13,7 +16,8 @@ class AppointmentDetailScreen extends StatefulWidget {
   const AppointmentDetailScreen({super.key, required this.appointment});
 
   @override
-  State<AppointmentDetailScreen> createState() => _AppointmentDetailScreenState();
+  State<AppointmentDetailScreen> createState() =>
+      _AppointmentDetailScreenState();
 }
 
 class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
@@ -25,7 +29,61 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     _appointment = widget.appointment;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppointmentProvider>().fetchPrescriptions(_appointment.id);
+      context.read<PaymentProvider>().fetchForAppointment(_appointment.id);
     });
+  }
+
+  Future<void> _pay(String method) async {
+    final provider = context.read<PaymentProvider>();
+    final result =
+        await provider.initiate(appointmentId: _appointment.id, method: method);
+    if (!mounted) return;
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(provider.error ?? 'Payment failed')));
+      return;
+    }
+    if (method == PaymentMethod.esewa &&
+        result.redirectUrl != null &&
+        result.formFields != null) {
+      // eSewa needs a POST with form fields, so open it in a WebView.
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EsewaPaymentScreen(
+            gatewayUrl: result.redirectUrl!,
+            formFields: result.formFields!,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      await context
+          .read<PaymentProvider>()
+          .fetchForAppointment(_appointment.id);
+    } else if (result.redirectUrl != null) {
+      final uri = Uri.parse(result.redirectUrl!);
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open payment page')));
+      }
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(result.message)));
+    }
+  }
+
+  Future<void> _collectCod(int paymentId) async {
+    final provider = context.read<PaymentProvider>();
+    final ok =
+        await provider.collectCod(paymentId, appointmentId: _appointment.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(ok
+              ? 'Payment marked as collected'
+              : (provider.error ?? 'Failed'))),
+    );
   }
 
   Future<void> _updateStatus(String status) async {
@@ -36,7 +94,8 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     } else if (status == AppointmentStatus.completed) {
       notes = await _promptNotes('Visit notes (optional)');
     }
-    final ok = await provider.updateStatus(_appointment.id, status, notes: notes);
+    final ok =
+        await provider.updateStatus(_appointment.id, status, notes: notes);
     if (!mounted) return;
     if (ok) {
       setState(() {
@@ -114,13 +173,15 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: dosageCtrl,
-                decoration: const InputDecoration(labelText: 'Dosage (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Dosage (optional)'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: instructionsCtrl,
                 maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Instructions (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Instructions (optional)'),
               ),
               const SizedBox(height: 18),
               ElevatedButton(
@@ -147,7 +208,83 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Prescription added' : (provider.error ?? 'Failed'))),
+      SnackBar(
+          content:
+              Text(ok ? 'Prescription added' : (provider.error ?? 'Failed'))),
+    );
+  }
+
+  Widget _buildPaymentSection(
+    BuildContext context, {
+    required bool isDoctor,
+    required bool isPatient,
+    required bool isAdmin,
+  }) {
+    final payment =
+        context.watch<PaymentProvider>().paymentForAppointment(_appointment.id);
+    final mutating = context.watch<PaymentProvider>().mutating;
+
+    Widget content;
+    if (payment != null && payment.isPaid) {
+      content = Row(
+        children: [
+          const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Paid via ${payment.method} · Rs. ${payment.amount.toStringAsFixed(2)}',
+            ),
+          ),
+        ],
+      );
+    } else if (isPatient) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (payment != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Last attempt: ${payment.method} · ${payment.status}',
+                  style: const TextStyle(color: AppColors.textSecondary)),
+            ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: PaymentMethod.all
+                .map((m) => OutlinedButton(
+                      onPressed: mutating ? null : () => _pay(m),
+                      child: Text('Pay with $m'),
+                    ))
+                .toList(),
+          ),
+        ],
+      );
+    } else if ((isDoctor || isAdmin) &&
+        payment != null &&
+        payment.method == PaymentMethod.cod) {
+      content = Row(
+        children: [
+          Expanded(child: Text('COD · ${payment.status}')),
+          ElevatedButton(
+            onPressed: mutating ? null : () => _collectCod(payment.id),
+            child: const Text('Mark collected'),
+          ),
+        ],
+      );
+    } else if (payment != null) {
+      content = Text('${payment.method} · ${payment.status}',
+          style: const TextStyle(color: AppColors.textSecondary));
+    } else {
+      content = const Text('No payment recorded yet.',
+          style: TextStyle(color: AppColors.textSecondary));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle(title: 'Payment'),
+        content,
+      ],
     );
   }
 
@@ -202,13 +339,15 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                       label: 'Patient',
                       value: _appointment.patientName!,
                     ),
-                  if (_appointment.reason != null && _appointment.reason!.isNotEmpty)
+                  if (_appointment.reason != null &&
+                      _appointment.reason!.isNotEmpty)
                     _InfoRow(
                       icon: Icons.notes_outlined,
                       label: 'Reason',
                       value: _appointment.reason!,
                     ),
-                  if (_appointment.notes != null && _appointment.notes!.isNotEmpty)
+                  if (_appointment.notes != null &&
+                      _appointment.notes!.isNotEmpty)
                     _InfoRow(
                       icon: Icons.sticky_note_2_outlined,
                       label: 'Notes',
@@ -227,7 +366,8 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               children: AppointmentStatus.all
                   .where((s) => s != _appointment.status)
                   .map((s) => OutlinedButton(
-                        onPressed: provider.mutating ? null : () => _updateStatus(s),
+                        onPressed:
+                            provider.mutating ? null : () => _updateStatus(s),
                         child: Text(s),
                       ))
                   .toList(),
@@ -241,9 +381,12 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               icon: const Icon(Icons.cancel_outlined, color: AppColors.danger),
               label: const Text('Cancel appointment',
                   style: TextStyle(color: AppColors.danger)),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.danger)),
+              style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.danger)),
             ),
           ],
+          _buildPaymentSection(context,
+              isDoctor: isDoctor, isPatient: isPatient, isAdmin: isAdmin),
           SectionTitle(
             title: 'Prescriptions',
             trailing: isDoctor
@@ -274,17 +417,21 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                         if (p.dosage != null && p.dosage!.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text('Dosage: ${p.dosage}',
-                              style: const TextStyle(color: AppColors.textSecondary)),
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary)),
                         ],
-                        if (p.instructions != null && p.instructions!.isNotEmpty) ...[
+                        if (p.instructions != null &&
+                            p.instructions!.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(p.instructions!,
-                              style: const TextStyle(color: AppColors.textSecondary)),
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary)),
                         ],
                         const SizedBox(height: 6),
                         Text(
                           DateFormat.yMMMd().format(p.createdAt),
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -300,7 +447,8 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoRow({required this.icon, required this.label, required this.value});
+  const _InfoRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -316,7 +464,8 @@ class _InfoRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 2),
                 Text(value, style: const TextStyle(fontSize: 15)),
               ],

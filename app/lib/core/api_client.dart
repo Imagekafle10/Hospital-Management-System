@@ -87,4 +87,34 @@ class ApiClient {
     );
     return _handle(res);
   }
+
+  Future<dynamic> delete(String url, {bool auth = true}) async {
+    final res = await http.delete(Uri.parse(url), headers: await _headers(auth: auth));
+    return _handle(res);
+  }
+
+  /// Multipart upload (e.g. medical record files). [fields] are plain form
+  /// fields; [fileBytes]/[fileName] are sent under the given [fileFieldName].
+  Future<dynamic> postMultipart(
+    String url, {
+    required Map<String, String> fields,
+    required List<int> fileBytes,
+    required String fileName,
+    String fileFieldName = 'File',
+    bool auth = true,
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse(url));
+    final headers = await _headers(auth: auth);
+    headers.remove('Content-Type'); // let http set the multipart boundary
+    request.headers.addAll(headers);
+    request.fields.addAll(fields);
+    request.files.add(http.MultipartFile.fromBytes(
+      fileFieldName,
+      fileBytes,
+      filename: fileName,
+    ));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    return _handle(res);
+  }
 }

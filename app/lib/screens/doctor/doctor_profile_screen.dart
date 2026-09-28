@@ -34,7 +34,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final d = context.read<DoctorProvider>().myProfile;
     if (d == null) return;
     setState(() {
-      _specialization = d.specialization;
+      _specialization = _normalizeSpecialization(d.specialization);
       _feeCtrl.text = d.consultationFee.toStringAsFixed(2);
       _experienceCtrl.text = d.yearsOfExperience.toString();
       _from = _parseTime(d.availableFrom);
@@ -42,11 +42,37 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     });
   }
 
+  String? _normalizeSpecialization(String? raw) {
+    if (raw == null) return null;
+    if (kSpecializations.contains(raw)) return raw;
+
+    // Map old/variant values from the backend to the dropdown values.
+    const legacy = {
+      'Cardiologist': 'Cardiology',
+      'Dermatologist': 'Dermatology',
+      'Endocrinologist': 'Endocrinology',
+      'Gastroenterologist': 'Gastroenterology',
+      'Gynecologist': 'Gynecology',
+      'Neurologist': 'Neurology',
+      'Oncologist': 'Oncology',
+      'Ophthalmologist': 'Ophthalmology',
+      'Orthopedic': 'Orthopedics',
+      'Orthopedist': 'Orthopedics',
+      'Pediatrician': 'Pediatrics',
+      'Psychiatrist': 'Psychiatry',
+      'Pulmonologist': 'Pulmonology',
+      'Radiologist': 'Radiology',
+      'Urologist': 'Urology',
+    };
+    return legacy[raw]; // null if unknown, so the dropdown starts empty
+  }
+
   TimeOfDay? _parseTime(String? raw) {
     if (raw == null) return null;
     final parts = raw.split(':');
     if (parts.length < 2) return null;
-    return TimeOfDay(hour: int.tryParse(parts[0]) ?? 0, minute: int.tryParse(parts[1]) ?? 0);
+    return TimeOfDay(
+        hour: int.tryParse(parts[0]) ?? 0, minute: int.tryParse(parts[1]) ?? 0);
   }
 
   String? _formatTime(TimeOfDay? t) {
@@ -71,8 +97,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Profile updated')));
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(provider.error ?? 'Update failed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(provider.error ?? 'Update failed')));
     }
   }
 
@@ -101,7 +127,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           : d == null
               ? ErrorView(
                   message: provider.error ?? 'Could not load profile',
-                  onRetry: () => context.read<DoctorProvider>().fetchMyProfile(),
+                  onRetry: () =>
+                      context.read<DoctorProvider>().fetchMyProfile(),
                 )
               : ListView(
                   padding: const EdgeInsets.all(20),
@@ -109,59 +136,81 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     Center(
                       child: CircleAvatar(
                         radius: 40,
-                        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                        backgroundColor:
+                            AppColors.primary.withValues(alpha: 0.12),
                         child: Text(
-                          (d.fullName?.isNotEmpty == true ? d.fullName![0] : '?').toUpperCase(),
+                          (d.fullName?.isNotEmpty == true
+                                  ? d.fullName![0]
+                                  : '?')
+                              .toUpperCase(),
                           style: const TextStyle(
-                              fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary),
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary),
                         ),
                       ),
                     ),
                     const SizedBox(height: 10),
                     Center(
                       child: Text('Dr. ${d.fullName ?? ''}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w700)),
                     ),
                     Center(
                       child: Text(d.email ?? '',
-                          style: const TextStyle(color: AppColors.textSecondary)),
+                          style:
+                              const TextStyle(color: AppColors.textSecondary)),
                     ),
                     const SizedBox(height: 6),
                     Center(
                       child: Text('License #${d.licenseNumber}',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary)),
                     ),
                     const SizedBox(height: 24),
                     if (!_editing) ...[
-                      _ReadRow(label: 'Specialization', value: d.specialization),
-                      _ReadRow(label: 'Fee', value: '\$${d.consultationFee.toStringAsFixed(2)}'),
-                      _ReadRow(label: 'Experience', value: '${d.yearsOfExperience} years'),
+                      _ReadRow(
+                          label: 'Specialization', value: d.specialization),
+                      _ReadRow(
+                          label: 'Fee',
+                          value: '\$${d.consultationFee.toStringAsFixed(2)}'),
+                      _ReadRow(
+                          label: 'Experience',
+                          value: '${d.yearsOfExperience} years'),
                       _ReadRow(
                         label: 'Available',
-                        value: (d.availableFrom != null && d.availableTo != null)
-                            ? '${d.availableFrom} – ${d.availableTo}'
-                            : 'Not set',
+                        value:
+                            (d.availableFrom != null && d.availableTo != null)
+                                ? '${d.availableFrom} – ${d.availableTo}'
+                                : 'Not set',
                       ),
                     ] else ...[
                       DropdownButtonFormField<String>(
-                        value: _specialization,
-                        decoration: const InputDecoration(labelText: 'Specialization'),
+                        value: kSpecializations.contains(_specialization)
+                            ? _specialization
+                            : null,
+                        decoration:
+                            const InputDecoration(labelText: 'Specialization'),
                         items: kSpecializations
-                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                            .map((s) =>
+                                DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
                         onChanged: (v) => setState(() => _specialization = v),
                       ),
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _feeCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Consultation fee', prefixText: '\$ '),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                            labelText: 'Consultation fee', prefixText: '\$ '),
                       ),
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _experienceCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Years of experience'),
+                        decoration: const InputDecoration(
+                            labelText: 'Years of experience'),
                       ),
                       const SizedBox(height: 14),
                       Row(
@@ -171,12 +220,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                               onPressed: () async {
                                 final picked = await showTimePicker(
                                   context: context,
-                                  initialTime: _from ?? const TimeOfDay(hour: 9, minute: 0),
+                                  initialTime: _from ??
+                                      const TimeOfDay(hour: 9, minute: 0),
                                 );
-                                if (picked != null) setState(() => _from = picked);
+                                if (picked != null)
+                                  setState(() => _from = picked);
                               },
                               icon: const Icon(Icons.schedule_outlined),
-                              label: Text(_from == null ? 'Available from' : _from!.format(context)),
+                              label: Text(_from == null
+                                  ? 'Available from'
+                                  : _from!.format(context)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -185,12 +238,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                               onPressed: () async {
                                 final picked = await showTimePicker(
                                   context: context,
-                                  initialTime: _to ?? const TimeOfDay(hour: 17, minute: 0),
+                                  initialTime: _to ??
+                                      const TimeOfDay(hour: 17, minute: 0),
                                 );
-                                if (picked != null) setState(() => _to = picked);
+                                if (picked != null)
+                                  setState(() => _to = picked);
                               },
                               icon: const Icon(Icons.schedule_outlined),
-                              label: Text(_to == null ? 'Available to' : _to!.format(context)),
+                              label: Text(_to == null
+                                  ? 'Available to'
+                                  : _to!.format(context)),
                             ),
                           ),
                         ],
@@ -220,9 +277,12 @@ class _ReadRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 140,
-            child: Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+            child: Text(label,
+                style: const TextStyle(color: AppColors.textSecondary)),
           ),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
         ],
       ),
     );

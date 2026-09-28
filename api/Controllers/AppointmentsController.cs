@@ -113,7 +113,7 @@ public class AppointmentsController : ControllerBase
         {
             var patient = await _patientRepo.GetByUserIdAsync(CurrentUserId);
             if (patient == null || patient.Id != appointment.PatientId) return Forbid();
-            if (dto.Status != "Cancelled") return Forbid("Patients may only cancel their own appointments.");
+            if (dto.Status != "Cancelled") return StatusCode(StatusCodes.Status403Forbidden, new { message = "Patients may only cancel their own appointments." });
         }
         else if (role == "Doctor")
         {

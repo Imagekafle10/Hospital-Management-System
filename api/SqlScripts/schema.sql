@@ -107,10 +107,137 @@ BEGIN
 END
 GO
 
--- Helpful indexes
-CREATE INDEX IX_Appointments_DoctorId ON dbo.Appointments(DoctorId);
-CREATE INDEX IX_Appointments_PatientId ON dbo.Appointments(PatientId);
-CREATE INDEX IX_Users_Email ON dbo.Users(Email);
+-- =====================================================================
+-- MedicalRecords: patient medical records & lab reports (file upload)
+-- =====================================================================
+IF OBJECT_ID('dbo.MedicalRecords', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.MedicalRecords (
+        Id               INT IDENTITY(1,1) PRIMARY KEY,
+        PatientId        INT             NOT NULL,
+        DoctorId         INT             NULL,
+        AppointmentId    INT             NULL,
+        RecordType       NVARCHAR(20)    NOT NULL CHECK (RecordType IN ('LabReport','Prescription','Diagnosis','Imaging','Other')),
+        Title            NVARCHAR(200)   NOT NULL,
+        Description      NVARCHAR(1000)  NULL,
+        FileName         NVARCHAR(260)   NOT NULL,
+        StoredFileName   NVARCHAR(100)   NOT NULL,
+        ContentType      NVARCHAR(150)   NOT NULL,
+        FileSizeBytes    BIGINT          NOT NULL,
+        UploadedByUserId INT             NOT NULL,
+        CreatedAt        DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_MedicalRecords_Patients FOREIGN KEY (PatientId) REFERENCES dbo.Patients(Id) ON DELETE CASCADE,
+        CONSTRAINT FK_MedicalRecords_Doctors FOREIGN KEY (DoctorId) REFERENCES dbo.Doctors(Id),
+        CONSTRAINT FK_MedicalRecords_Appointments FOREIGN KEY (AppointmentId) REFERENCES dbo.Appointments(Id),
+        CONSTRAINT FK_MedicalRecords_Users FOREIGN KEY (UploadedByUserId) REFERENCES dbo.Users(Id)
+    );
+END
+GO
+
+-- =====================================================================
+-- Payments: Esewa / Khalti / COD payment for an appointment
+-- =====================================================================
+IF OBJECT_ID('dbo.Payments', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.Payments (
+        Id                INT IDENTITY(1,1) PRIMARY KEY,
+        AppointmentId     INT             NOT NULL,
+        PatientId         INT             NOT NULL,
+        Amount            DECIMAL(10,2)   NOT NULL,
+        Method            NVARCHAR(20)    NOT NULL CHECK (Method IN ('Esewa','Khalti','COD')),
+        Status            NVARCHAR(20)    NOT NULL DEFAULT 'Pending' CHECK (Status IN ('Pending','Success','Failed','Cancelled')),
+        TransactionUuid   NVARCHAR(100)   NOT NULL UNIQUE,
+        GatewayReference  NVARCHAR(100)   NULL,
+        CreatedAt         DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+        PaidAt            DATETIME2       NULL,
+        CONSTRAINT FK_Payments_Appointments FOREIGN KEY (AppointmentId) REFERENCES dbo.Appointments(Id),
+        CONSTRAINT FK_Payments_Patients FOREIGN KEY (PatientId) REFERENCES dbo.Patients(Id)
+    );
+END
+GO
+
+-- =====================================================================
+-- Wards / Beds / Admissions: in-patient management
+-- =====================================================================
+IF OBJECT_ID('dbo.Wards', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.Wards (
+        Id           INT IDENTITY(1,1) PRIMARY KEY,
+        Name         NVARCHAR(100)   NOT NULL UNIQUE,
+        WardType     NVARCHAR(20)    NOT NULL CHECK (WardType IN ('General','ICU','Private','Maternity','Emergency')),
+        FloorNumber  INT             NULL,
+        Description  NVARCHAR(500)   NULL,
+        CreatedAt    DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME()
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.Beds', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.Beds (
+        Id         INT IDENTITY(1,1) PRIMARY KEY,
+        WardId     INT             NOT NULL,
+        BedNumber  NVARCHAR(20)    NOT NULL,
+        Status     NVARCHAR(20)    NOT NULL DEFAULT 'Available' CHECK (Status IN ('Available','Occupied','Maintenance')),
+        CreatedAt  DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_Beds_Wards FOREIGN KEY (WardId) REFERENCES dbo.Wards(Id) ON DELETE CASCADE,
+        CONSTRAINT UQ_Beds_WardId_BedNumber UNIQUE (WardId, BedNumber)
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.Admissions', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.Admissions (
+        Id                     INT IDENTITY(1,1) PRIMARY KEY,
+        PatientId              INT             NOT NULL,
+        AdmittingDoctorId      INT             NOT NULL,
+        BedId                  INT             NOT NULL,
+        AdmissionDate          DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+        ExpectedDischargeDate  DATETIME2       NULL,
+        DischargeDate          DATETIME2       NULL,
+        ReasonForAdmission     NVARCHAR(500)   NOT NULL,
+        Status                 NVARCHAR(20)    NOT NULL DEFAULT 'Admitted' CHECK (Status IN ('Admitted','Discharged')),
+        DischargeSummary       NVARCHAR(1000)  NULL,
+        CreatedAt              DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+        UpdatedAt              DATETIME2       NULL,
+        CONSTRAINT FK_Admissions_Patients FOREIGN KEY (PatientId) REFERENCES dbo.Patients(Id),
+        CONSTRAINT FK_Admissions_Doctors FOREIGN KEY (AdmittingDoctorId) REFERENCES dbo.Doctors(Id),
+        CONSTRAINT FK_Admissions_Beds FOREIGN KEY (BedId) REFERENCES dbo.Beds(Id)
+    );
+END
+GO
+
+-- Helpful indexes (guarded so this script is safe to re-run)
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Appointments_DoctorId' AND object_id = OBJECT_ID('dbo.Appointments'))
+    CREATE INDEX IX_Appointments_DoctorId ON dbo.Appointments(DoctorId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Appointments_PatientId' AND object_id = OBJECT_ID('dbo.Appointments'))
+    CREATE INDEX IX_Appointments_PatientId ON dbo.Appointments(PatientId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Users_Email' AND object_id = OBJECT_ID('dbo.Users'))
+    CREATE INDEX IX_Users_Email ON dbo.Users(Email);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_MedicalRecords_PatientId' AND object_id = OBJECT_ID('dbo.MedicalRecords'))
+    CREATE INDEX IX_MedicalRecords_PatientId ON dbo.MedicalRecords(PatientId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Payments_AppointmentId' AND object_id = OBJECT_ID('dbo.Payments'))
+    CREATE INDEX IX_Payments_AppointmentId ON dbo.Payments(AppointmentId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Payments_PatientId' AND object_id = OBJECT_ID('dbo.Payments'))
+    CREATE INDEX IX_Payments_PatientId ON dbo.Payments(PatientId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Beds_WardId' AND object_id = OBJECT_ID('dbo.Beds'))
+    CREATE INDEX IX_Beds_WardId ON dbo.Beds(WardId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Admissions_PatientId' AND object_id = OBJECT_ID('dbo.Admissions'))
+    CREATE INDEX IX_Admissions_PatientId ON dbo.Admissions(PatientId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Admissions_BedId' AND object_id = OBJECT_ID('dbo.Admissions'))
+    CREATE INDEX IX_Admissions_BedId ON dbo.Admissions(BedId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Admissions_Status' AND object_id = OBJECT_ID('dbo.Admissions'))
+    CREATE INDEX IX_Admissions_Status ON dbo.Admissions(Status);
 GO
 
 PRINT 'Schema created successfully.';

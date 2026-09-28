@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'admissions_screen.dart';
 import 'doctor_appointments_screen.dart';
 import 'doctor_profile_screen.dart';
+import 'patients_records_screen.dart';
 
 class DoctorDashboard extends StatefulWidget {
   const DoctorDashboard({super.key});
@@ -14,6 +16,8 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
 
   final _screens = const [
     DoctorAppointmentsScreen(),
+    AdmissionsScreen(),
+    PatientsRecordsScreen(),
     DoctorProfileScreen(),
   ];
 
@@ -29,6 +33,14 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
               icon: Icon(Icons.event_note_outlined),
               selectedIcon: Icon(Icons.event_note),
               label: 'Schedule'),
+          NavigationDestination(
+              icon: Icon(Icons.local_hospital_outlined),
+              selectedIcon: Icon(Icons.local_hospital),
+              label: 'Admissions'),
+          NavigationDestination(
+              icon: Icon(Icons.folder_shared_outlined),
+              selectedIcon: Icon(Icons.folder_shared),
+              label: 'Records'),
           NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
