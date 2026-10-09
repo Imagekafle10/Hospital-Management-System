@@ -1,0 +1,191 @@
+# ============================================================
+# .NET / ASP.NET Core
+# ============================================================
+# .NET build output
+**/bin/
+**/obj/
+
+# Archives
+*.zip
+*.rar
+*.7z
+
+# Build output
+**/bin/
+**/obj/
+
+# Visual Studio
+**/.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / JetBrains
+**/.idea/
+*.sln.iml
+
+# Visual Studio Code
+**/.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# ASP.NET generated files
+wwwroot/lib/
+
+# Test results
+TestResults/
+*.trx
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Logs
+*.log
+
+
+# ============================================================
+# Environment / Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+
+# Local configuration / secrets
+appsettings.Local.json
+appsettings.Development.json
+
+# User secrets
+secrets.json
+
+
+# ============================================================
+# Flutter / Dart
+# ============================================================
+
+# Flutter build
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/build/
+
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+# Flutter generated platform files
+**/android/.gradle/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# Flutter/Dart IDE files
+**/.idea/
+**/.metadata
+
+# Flutter iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/.last_build_id/
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/.cxx/
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+
+# macOS
+**/macos/Pods/
+**/macos/Flutter/ephemeral/
+
+# Windows
+**/windows/flutter/ephemeral/
+
+# Linux
+**/linux/flutter/ephemeral/
+
+
+# ============================================================
+# React / Node.js
+# ============================================================
+
+# Node dependencies
+**/node_modules/
+
+# React / Vite build output
+**/dist/
+**/build/
+
+# Vite
+**/.vite/
+
+# npm logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Environment files
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+
+
+# ============================================================
+# General
+# ============================================================
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Archives
+*.zip
+*.rar
+*.7z
+
+
+# ============================================================
+# Local Database Files
+# ============================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+
+# ============================================================
+# Project-specific sensitive files
+# ============================================================
+
+# Flutter local API / map configuration
+**/maps.env.json
+**/maps.env.local.json
+
+# Firebase local configuration
+**/google-services.json
+**/GoogleService-Info.plist
